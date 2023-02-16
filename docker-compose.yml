@@ -1,0 +1,26 @@
+x-nginx-template: &nginx-template
+  image: nginx
+  ports:
+    - 8000:8000
+  networks:
+    - common
+  depends_on:
+    - api
+
+services:
+  api:
+    build: api
+    container_name: api
+    ports:
+      - 3000:3000
+    networks:
+      - common
+
+  nginx-no-cache:
+    << : *nginx-template  
+    container_name: nginx-no-cache
+    volumes:
+      - ./nginx/nginx-no-cache.conf:/etc/nginx/nginx.conf
+
+networks:
+  common:
