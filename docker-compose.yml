@@ -16,6 +16,14 @@ services:
     networks:
       - common
 
+  client:
+    build: client
+    container_name: client
+    networks:
+      - common
+    depends_on:
+      - nginx-no-cache
+
   nginx-no-cache:
     << : *nginx-template  
     container_name: nginx-no-cache
