@@ -23,6 +23,19 @@ const tests = [
       { time: 15000, simulateStatus: 200, info: 'Finally, after cached data expires, a new request will hit the upstream.' },
     ]
   },
+  {
+    name: 'Stale cache',
+    address: 'nginx-stale-cache:8000',
+    requests: [
+      { time: 0, simulateStatus: 200, info: 'The first request will always hit the upstream.' },
+      { time: 2000, simulateStatus: 200, info: 'The second request will be responded to by using the cached data (CACHE HIT).' },
+      { time: 4000, simulateStatus: 200, simulatedResponseTime:5000, info: 'API becomes unstable, and it would take 5s (more than timeout) to respond, but as cache is still valid, the cached data will be returned (CACHE HIT).' },
+      { time: 15000, simulateStatus: 200, simulatedResponseTime:5000, info: 'Now cache has already expired, but as API is still unavailable, cached data will be returned (CACHE STALE).' },
+      { time: 22000, simulateStatus: 500,  info: 'Other simulation of problem: API will return HTTP 500 and CACHE STALE will be returned.' },
+      { time: 24000, simulateStatus: 200, info: 'API becomes stable. Cache will be updated and a fresh data will be returned. Cache status = EXPIRED.' },
+      { time: 26000, simulateStatus: 200, info: 'As data was refreshed, CACHE HIT was back to work.' },
+    ]
+  },
 ]
 
 async function run() {

@@ -160,4 +160,89 @@ sequenceDiagram
 
 When the cache expires, the next request to that key will have to hit upstream to get a fresh response (which will be cached). Define cache time carefully: low values reduce the probability to reuse cached data (remember there is a computational cost to keep the cache working) and may not reduce the overload on the upstream; high values may deliver too outdated data to users, i.e. users may take much time to see the new modifications.
 
+## Stale cache
+
+Although [what I called] simple cache strategy improves an app setup for when the cache hit ratio is greater than zero, the real world is evil, and things will fail. Let's see what happens when the API server becomes unavailable for a few seconds.
+
+```mermaid
+sequenceDiagram
+    actor Client
+    participant Nginx
+    participant API
+
+    Client->>+Nginx: GET /resource/1
+    Nginx->>+API: GET /resource/1 (proxy pass)
+    API-->>-Nginx: response (HTTP 200)
+    Nginx-->>-Client: response (HTTP 200) (CACHE MISS)
+
+    Client->>+Nginx: GET /resource/1
+    Nginx-->>-Client: response (HTTP 200) (CACHE HIT)
+
+    Note over API: API is unstable
+
+    Client->>+Nginx: GET /resource/1
+    Nginx-->>-Client: response (HTTP 200) (CACHE HIT)
+
+    Note over Nginx: key '/resource/1' expired
+
+    Client->>+Nginx: GET /resource/1
+    Nginx->>API: GET /resource/1 (proxy pass)
+    Nginx-->>-Client: response (HTTP 504) (CACHE EXPIRED)
+```
+
+While the cache key is valid (not expired), the client will not notice the API trouble, since the request doesn't even hit there. But, as soon as the key expires, new requests will try to hit there and won't be able to get a response. This error will be exposed to the client. In some cases, it is totally right, but what if you can deliver the cached data for some extra time while waiting for upstream recovery? This is the stale cache.
+
+Instead of exposing the error to the client, it will deliver the last cached data, but there are several differences from the normal CACHE HIT. First of all, stale means the cache is not valid anymore (it is older than 10s in this case: `proxy_cache_valid any 10s;`), so be careful when configuring a stale cache to not cause side effects due to too outdated data. Let's add a new configuration to `proxy_cache_path` to determine how long a cache key will exist (even expired).
+
+```
+proxy_cache_path /var/cache keys_zone=zone1:10m inactive=60m;
+```
+
+Also note, different from CACHE HIT, the CACHE STALE means the Nginx tried to reach the upstream (as the cache was expired) and didn't get it. Cache Status "STALE" on the logs, in this case, is worrisome. Fortunately, you can define exactly in what cases you want to deliver stale cache by using [proxy_cache_use_stale](http://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_cache_use_stale). By default it is `off`, but let's change to:
+
+```
+proxy_cache_use_stale error timeout invalid_header http_500 http_502 http_503 http_504;
+```
+
+The following diagram shows an example of how stale cache works.
+
+```mermaid
+sequenceDiagram
+    actor Client
+    participant Nginx
+    participant API
+
+    Client->>+Nginx: GET /resource/1
+    Nginx->>+API: GET /resource/1 (proxy pass)
+    API-->>-Nginx: response (HTTP 200)
+    Nginx-->>-Client: response (HTTP 200) (CACHE MISS)
+
+    Client->>+Nginx: GET /resource/1
+    Nginx-->>-Client: response (HTTP 200) (CACHE HIT)
+
+    Note over API: API is unstable
+
+    Client->>+Nginx: GET /resource/1
+    Nginx-->>-Client: response (HTTP 200) (CACHE HIT)
+
+    Note over Nginx: key '/resource/1' expired
+
+    Client->>+Nginx: GET /resource/1
+    Nginx->>API: GET /resource/1 (proxy pass)
+    Nginx-->>-Client: response (HTTP 200) (CACHE STALE)
+
+    Client->>+Nginx: GET /resource/1
+    Nginx->>API: GET /resource/1 (proxy pass)
+    Nginx-->>-Client: response (HTTP 200) (CACHE STALE)
+
+    Note over API: API is stable
+
+    Client->>+Nginx: GET /resource/1
+    Nginx->>+API: GET /resource/1 (proxy pass)
+    API-->>-Nginx: response (HTTP 200)
+    Nginx-->>-Client: response (HTTP 200) (CACHE EXPIRED)
+
+    Client->>+Nginx: GET /resource/1
+    Nginx-->>-Client: response (HTTP 200) (CACHE HIT)
+```
 

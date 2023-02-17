@@ -20,6 +20,7 @@ services:
     depends_on:
       - nginx-no-cache
       - nginx-simple-cache
+      - nginx-stale-cache
 
   nginx-no-cache:
     << : *nginx-template  
@@ -32,6 +33,12 @@ services:
     container_name: nginx-simple-cache
     volumes:
       - ./nginx/nginx-simple-cache.conf:/etc/nginx/nginx.conf
+
+  nginx-stale-cache:
+    << : *nginx-template  
+    container_name: nginx-stale-cache
+    volumes:
+      - ./nginx/nginx-stale-cache.conf:/etc/nginx/nginx.conf
 
 networks:
   common:
