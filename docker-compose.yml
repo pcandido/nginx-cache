@@ -21,24 +21,39 @@ services:
       - nginx-no-cache
       - nginx-simple-cache
       - nginx-stale-cache
+      - nginx-locked-cache
 
   nginx-no-cache:
     << : *nginx-template  
     container_name: nginx-no-cache
+    ports:
+      - 8001:8000
     volumes:
       - ./nginx/nginx-no-cache.conf:/etc/nginx/nginx.conf
 
   nginx-simple-cache:
     << : *nginx-template  
     container_name: nginx-simple-cache
+    ports:
+      - 8002:8000
     volumes:
       - ./nginx/nginx-simple-cache.conf:/etc/nginx/nginx.conf
 
   nginx-stale-cache:
     << : *nginx-template  
     container_name: nginx-stale-cache
+    ports:
+      - 8003:8000
     volumes:
       - ./nginx/nginx-stale-cache.conf:/etc/nginx/nginx.conf
+
+  nginx-locked-cache:
+    << : *nginx-template  
+    container_name: nginx-locked-cache
+    ports:
+      - 8004:8000
+    volumes:
+      - ./nginx/nginx-locked-cache.conf:/etc/nginx/nginx.conf
 
 networks:
   common:

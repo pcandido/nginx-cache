@@ -246,3 +246,98 @@ sequenceDiagram
     Nginx-->>-Client: response (HTTP 200) (CACHE HIT)
 ```
 
+## Locking a cache key
+
+Enable cache and stale cache at Nginx will improve the app's reliability. But let's see one more problem (or characteristic) of our setup. Imagine a scenario where a single cache key is very demanded. Cache in this case will help a lot, by responding to the majority of requests. If your cache expires in 30s, theoretically, we expect one request each 30s, even though Nginx is receiving thousands of requests a second, right?
+
+Wrong! Take a look at the following diagram.
+
+```mermaid
+sequenceDiagram
+    actor Client
+    participant Nginx
+    participant API
+
+    Client->>+Nginx: [req1] GET /resource/1
+    Client->>Nginx: [req2] GET /resource/1
+    Nginx->>+API: [req1] GET /resource/1 (proxy pass)
+    Nginx->>API: [req2] GET /resource/1 (proxy pass)
+    API-->>Nginx: [req1] response (HTTP 200)
+    Nginx-->>Client: [req1] response (HTTP 200) (CACHE MISS)
+    API-->>-Nginx: [req2] response (HTTP 200)
+    Nginx-->>-Client: [req2] response (HTTP 200) (CACHE MISS)
+
+    Client->>+Nginx: 5000 x GET /resource/1
+    Nginx-->>-Client: 5000 x response (HTTP 200) (CACHE HIT)
+
+    Note over Nginx: key '/resource/1' expired
+
+    Client->>+Nginx: [req1] GET /resource/1
+    Client->>Nginx: [req2] GET /resource/1
+    Nginx->>+API: [req1] GET /resource/1 (proxy pass)
+    Client->>Nginx: [req3] GET /resource/1
+    Nginx->>API: [req2] GET /resource/1 (proxy pass)
+    Nginx->>API: [req3] GET /resource/1 (proxy pass)
+    API-->>Nginx: [req1] response (HTTP 200)
+    Nginx-->>Client: [req1] response (HTTP 200) (CACHE EXPIRED)
+    API-->>Nginx: [req2] response (HTTP 200)
+    Nginx-->>Client: [req2] response (HTTP 200) (CACHE EXPIRED)
+    API-->>-Nginx: [req3] response (HTTP 200)
+    Nginx-->>-Client: [req3] response (HTTP 200) (CACHE EXPIRED)
+
+    Client->>+Nginx: 5000 x GET /resource/1
+    Nginx-->>-Client: 5000 x response (HTTP 200) (CACHE HIT)
+```
+
+Note two requests arrived at almost the same time at the beginning of the example, and also, when the cache expired, again three requests arrived and all of these requests were sent to upstream. 
+Five requests were (proxy) passed, but it could be just two.
+
+Nginx populates the cache with the return of the upstream, so until the upstream returns, there is no cached data, and if there is no cached data, requests (doesn't matter whether one or one hundred) will be sent to the upstream.
+
+To change this behavior, we can use `proxy_cache_lock` flag. When there is no cached data (CACHE MISS), it will make Nginx (proxy) pass just one request at a time by key, all the others will wait for the cache to be populated and Nginx will respond with CACHE HIT. As we are locking a key, it's important to define a timeout, in case upstream doesn't return.
+
+```
+proxy_cache_lock on;
+proxy_cache_lock_timeout 30s;
+```
+
+But as I said before, it works for cases when there is no cached data. Documentation says:
+> When enabled, only one request at a time will be allowed to populate **a new cache element** identified according to the proxy_cache_key directive by passing a request to a proxied server.
+
+For cases when the cache exists but is invalid (expired), this flag itself doesn't change anything, but we can combine it with `proxy_cache_use_stale` so that a stale version was delivered while Nginx is updating the cache. The cache status for those cases is CACHE UPDATING.
+
+```
+proxy_cache_use_stale **updating** error timeout invalid_header http_500 http_502 http_503 http_504;
+```
+
+Now you can see on the following diagram that for the same requests, just two of them hit the upstream.
+
+```mermaid
+sequenceDiagram
+    actor Client
+    participant Nginx
+    participant API
+
+    Client->>+Nginx: GET /resource/1
+    Nginx->>+API: GET /resource/1 (proxy pass)
+    API-->>-Nginx: response (HTTP 200)
+    Nginx-->>-Client: response (HTTP 200) (CACHE MISS)
+
+    Client->>+Nginx: 5000 x GET /resource/1
+    Nginx-->>-Client: 5000 x response (HTTP 200) (CACHE HIT)
+
+    Note over Nginx: key '/resource/1' expired
+
+    Client->>+Nginx: [req1] GET /resource/1
+    Nginx->>+API: [req1] GET /resource/1 (proxy pass)
+    Client->>Nginx: [req2] GET /resource/1
+    Nginx-->>Client: [req2] response (HTTP 200) (CACHE UPDATING)
+    Client->>Nginx: [req3] GET /resource/1
+    Nginx-->>-Client: [req3] response (HTTP 200) (CACHE UPDATING)
+    API-->>-Nginx: [req1] response (HTTP 200)
+    Nginx-->>Client: [req1] response (HTTP 200) (CACHE EXPIRED)
+
+    Client->>+Nginx: 5000 x GET /resource/1
+    Nginx-->>-Client: 5000 x response (HTTP 200) (CACHE HIT)
+```
+

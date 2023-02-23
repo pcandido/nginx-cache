@@ -36,6 +36,23 @@ const tests = [
       { time: 26000, simulateStatus: 200, info: 'As data was refreshed, CACHE HIT was back to work.' },
     ]
   },
+  {
+    name: 'Locked cache key',
+    address: 'nginx-locked-cache:8000',
+    requests: [
+      { time: 0, simulateStatus: 200, info: 'The first request will always hit the upstream.' },
+      { time: 100, simulateStatus: 200, info: 'API did not respond to the first request, this one will wait.' },
+      { time: 200, simulateStatus: 200, info: 'API did not respond to the first request, this one will wait.' },
+      { time: 300, simulateStatus: 200, info: 'API did not respond to the first request, this one will wait.' },
+      { time: 400, simulateStatus: 200, info: 'API did not respond to the first request, this one will wait.' },
+      { time: 12000, simulateStatus: 200, info: 'Now the key is expired, we need a new hit to upstream' },
+      { time: 12100, simulateStatus: 200, info: 'As Nginx already has some cached data, they will be delivered until updating the cache. CACHE STATUS = UPDATING' },
+      { time: 12200, simulateStatus: 200, info: 'As Nginx already has some cached data, they will be delivered until updating the cache. CACHE STATUS = UPDATING' },
+      { time: 12300, simulateStatus: 200, info: 'As Nginx already has some cached data, they will be delivered until updating the cache. CACHE STATUS = UPDATING' },
+      { time: 12400, simulateStatus: 200, info: 'As Nginx already has some cached data, they will be delivered until updating the cache. CACHE STATUS = UPDATING' },
+      { time: 15000, simulateStatus: 200, info: 'Now cache was revalidated, CACHE HIT backs to work' },
+    ]
+  },
 ]
 
 async function run() {
