@@ -385,3 +385,19 @@ sequenceDiagram
 ```
 
 You may notice, although the cache status is STALE, the response time measured by Nginx is stall high (as if the requests were waiting for the upstream). What happens is: the client was responded (very quickly, because of the stale cache), but the process itself waits for the cache revalidation, so don't trust the request time in this case 😔.
+
+## How to run
+
+The project includes a docker-compose file that runs:
+* An API to represent the upstream. It accepts some query parameters to determine what to respond.
+* Five instances of Nginx, each one representing one of the presented setups
+* A client that sends some requests to the Nginx instances to simulate the presented scenarios.
+
+To run the project, you need docker installed.
+
+```bash
+$ docker compose build
+$ docker compose up
+```
+
+And follow the logs, they will explain to you what is happening. Finally, explore the Nginx config files 😃.
