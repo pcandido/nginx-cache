@@ -341,3 +341,47 @@ sequenceDiagram
     Nginx-->>-Client: 5000 x response (HTTP 200) (CACHE HIT)
 ```
 
+## Background update
+
+This last finetune is simpler but could improve a lot the overall API response time. We saw before in case of a cache key should be updated, just one request will hit the upstream, and all the others will be responded with stale. What if, even the first request would be responded with stale, and then the cache update would be done in the background (with no client waiting)?
+
+It is exactly what the following [configuration](http://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_cache_background_update) does.
+
+```
+proxy_cache_background_update on;
+```
+
+Note the cache status, in this case, isn't CACHE UPDATING, but CACHE STALE. I recommend to log `upstream_cache_status` to be able to differentiate the background updating process (`upstream_cache_status = "-"`) and a real error (`upstream_cache_status = "500"`), as the cache status is the same for both cases.
+
+Let's see one example using the background update.
+
+```mermaid
+sequenceDiagram
+    actor Client
+    participant Nginx
+    participant API
+
+    Client->>+Nginx: GET /resource/1
+    Nginx->>+API: GET /resource/1 (proxy pass)
+    API-->>-Nginx: response (HTTP 200)
+    Nginx-->>-Client: response (HTTP 200) (CACHE MISS)
+
+    Client->>+Nginx: 5000 x GET /resource/1
+    Nginx-->>-Client: 5000 x response (HTTP 200) (CACHE HIT)
+
+    Note over Nginx: key '/resource/1' expired
+
+    Client->>+Nginx: [req1] GET /resource/1
+    Nginx-->>-Client: [req1] response (HTTP 200) (CACHE STALE)
+    Nginx->>+API: [req1-background] GET /resource/1 (proxy pass)
+    Client->>+Nginx: [req2] GET /resource/1
+    Nginx-->>-Client: [req2] response (HTTP 200) (CACHE UPDATING)
+    Client->>+Nginx: [req3] GET /resource/1
+    Nginx-->>-Client: [req3] response (HTTP 200) (CACHE UPDATING)
+    API-->>-Nginx: [req1-background] response (HTTP 200)
+
+    Client->>+Nginx: 5000 x GET /resource/1
+    Nginx-->>-Client: 5000 x response (HTTP 200) (CACHE HIT)
+```
+
+You may notice, although the cache status is STALE, the response time measured by Nginx is stall high (as if the requests were waiting for the upstream). What happens is: the client was responded (very quickly, because of the stale cache), but the process itself waits for the cache revalidation, so don't trust the request time in this case 😔.

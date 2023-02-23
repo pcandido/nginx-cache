@@ -53,6 +53,19 @@ const tests = [
       { time: 15000, simulateStatus: 200, info: 'Now cache was revalidated, CACHE HIT backs to work' },
     ]
   },
+  {
+    name: 'Background update',
+    address: 'nginx-background-update:8000',
+    requests: [
+      { time: 0, simulateStatus: 200, info: 'The first request will always hit the upstream.' },
+      { time: 15000, simulateStatus: 201, info: 'Despite expired, this request will not wait for upstream. Stale will be returned instead. CACHE STATUS = STALE' },
+      { time: 15100, simulateStatus: 200, info: 'While the cache is updated in background, stale continues to be delivered. CACHE STATUS = UPDATING' },
+      { time: 15200, simulateStatus: 200, info: 'While the cache is updated in background, stale continues to be delivered. CACHE STATUS = UPDATING' },
+      { time: 15300, simulateStatus: 200, info: 'While the cache is updated in background, stale continues to be delivered. CACHE STATUS = UPDATING' },
+      { time: 15400, simulateStatus: 200, info: 'While the cache is updated in background, stale continues to be delivered. CACHE STATUS = UPDATING' },
+      { time: 18000, simulateStatus: 200, info: 'Now cache was revalidated, CACHE HIT backs to work' },
+    ]
+  },
 ]
 
 async function run() {
