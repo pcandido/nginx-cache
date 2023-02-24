@@ -351,9 +351,7 @@ It is exactly what the following [configuration](http://nginx.org/en/docs/http/n
 proxy_cache_background_update on;
 ```
 
-Note the cache status, in this case, isn't CACHE UPDATING, but CACHE STALE. I recommend to log `upstream_cache_status` to be able to differentiate the background updating process (`upstream_cache_status = "-"`) and a real error (`upstream_cache_status = "500"`), as the cache status is the same for both cases.
-
-Let's see one example using the background update.
+Note the cache status, in this case, isn't CACHE UPDATING, but CACHE STALE. Let's see one example using the background update.
 
 ```mermaid
 sequenceDiagram
