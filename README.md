@@ -382,7 +382,7 @@ sequenceDiagram
     Nginx-->>-Client: 5000 x response (HTTP 200) (CACHE HIT)
 ```
 
-You may notice, although the cache status is STALE, the response time measured by Nginx is stall high (as if the requests were waiting for the upstream). What happens is: the client was responded (very quickly, because of the stale cache), but the process itself waits for the cache revalidation, so don't trust the request time in this case 😔.
+You may notice, although the cache status is STALE, the response time measured by Nginx is still high (as if the requests were waiting for the upstream). What happens is: the client was responded (very quickly, because of the stale cache), but the process itself waits for the cache revalidation, so don't trust the request time in this case 😔.
 
 ## How to run
 
